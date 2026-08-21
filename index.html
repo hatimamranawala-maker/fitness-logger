@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>My Fitness Assistant</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      color: #222;
+    }
+
+    .app {
+      max-width: 700px;
+      margin: auto;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: white;
+      padding: 18px 20px;
+      border-bottom: 1px solid #ddd;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 21px;
+    }
+
+    header p {
+      margin: 4px 0 0;
+      color: #777;
+      font-size: 13px;
+    }
+
+    #chat {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .message {
+      margin-bottom: 16px;
+      display: flex;
+    }
+
+    .message.user {
+      justify-content: flex-end;
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 12px 15px;
+      border-radius: 18px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .assistant .bubble {
+      background: white;
+      border: 1px solid #ddd;
+    }
+
+    .user .bubble {
+      background: #222;
+      color: white;
+    }
+
+    .composer {
+      background: white;
+      border-top: 1px solid #ddd;
+      padding: 12px;
+      position: sticky;
+      bottom: 0;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 52px;
+      max-height: 150px;
+      resize: none;
+      padding: 13px;
+      font-size: 17px;
+      border: 1px solid #ccc;
+      border-radius: 15px;
+      outline: none;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    button {
+      border: none;
+      border-radius: 14px;
+      padding: 13px 17px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #micButton {
+      flex: 1;
+      background: #222;
+      color: white;
+    }
+
+    #sendButton {
+      flex: 1;
+      background: #1976d2;
+      color: white;
+    }
+
+    #micButton.recording {
+      background: #c62828;
+    }
+
+    #status {
+      text-align: center;
+      color: #777;
+      font-size: 13px;
+      margin-top: 8px;
+      min-height: 18px;
+    }
+
+    .typing {
+      opacity: 0.6;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <header>
+    <h1>My Fitness Assistant</h1>
+    <p>Your personal nutrition & training log</p>
+  </header>
+
+  <div id="chat">
+
+    <div class="message assistant">
+      <div class="bubble">
+        Hey! I'm your fitness assistant. Tell me what you ate, your weight, your workout, or anything about your training.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="composer">
+
+    <textarea
+      id="messageInput"
+      placeholder="Tell me what you ate or how you trained..."
+    ></textarea>
+
+    <div class="controls">
+
+      <button id="micButton" onclick="toggleRecording()">
+        🎙️ Talk
+      </button>
+
+      <button id="sendButton" onclick="sendMessage()">
+        Send
+      </button>
+
+    </div>
+
+    <div id="status"></div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+  // =====================================================
+  // YOUR GOOGLE APPS SCRIPT WEB APP URL
+  // =====================================================
+
+  const APPS_SCRIPT_URL =
+    "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+
+
+  // =====================================================
+  // CONVERSATION MEMORY
+  // =====================================================
+
+  let conversation = [];
+
+
+  // =====================================================
+  // CHAT DISPLAY
+  // =====================================================
+
+  function addMessage(role, text) {
+
+    const chat = document.getElementById("chat");
+
+    const message = document.createElement("div");
+
+    message.className =
+      "message " + role;
+
+    const bubble =
+      document.createElement("div");
+
+    bubble.className = "bubble";
+
+    bubble.innerText = text;
+
+    message.appendChild(bubble);
+
+    chat.appendChild(message);
+
+    chat.scrollTop = chat.scrollHeight;
+
+  }
+
+
+  // =====================================================
+  // SEND MESSAGE
+  // =====================================================
+
+  async function sendMessage() {
+
+    const input =
+      document.getElementById("messageInput");
+
+    const text =
+      input.value.trim();
+
+    if (!text) return;
+
+    addMessage("user", text);
+
+    conversation.push({
+      role: "user",
+      content: text
+    });
+
+    input.value = "";
+
+    setStatus("Thinking...");
+
+    try {
+
+      const response =
+        await fetch(APPS_SCRIPT_URL, {
+
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json"
+          },
+
+          body: JSON.stringify({
+
+            action: "chat",
+
+            message: text,
+
+            conversation: conversation
+
+          })
+
+        });
+
+
+      const result =
+        await response.json();
+
+
+      if (!result.success) {
+
+        throw new Error(
+          result.error || "Unknown error"
+        );
+
+      }
+
+
+      const reply =
+        result.reply;
+
+
+      addMessage("assistant", reply);
+
+      conversation.push({
+        role: "assistant",
+        content: reply
+      });
+
+
+      setStatus("");
+
+      speak(reply);
+
+
+    } catch (error) {
+
+      addMessage(
+        "assistant",
+        "Sorry, something went wrong: " +
+        error.message
+      );
+
+      setStatus("");
+
+    }
+
+  }
+
+
+  // =====================================================
+  // VOICE RECORDING
+  // =====================================================
+
+  let mediaRecorder = null;
+
+  let audioChunks = [];
+
+  let isRecording = false;
+
+
+  async function toggleRecording() {
+
+    if (isRecording) {
+
+      mediaRecorder.stop();
+
+      return;
+
+    }
+
+
+    try {
+
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          audio: true
+        });
+
+
+      audioChunks = [];
+
+
+      mediaRecorder =
+        new MediaRecorder(stream);
+
+
+      mediaRecorder.ondataavailable =
+        function(event) {
+
+          if (event.data.size > 0) {
+
+            audioChunks.push(
+              event.data
+            );
+
+          }
+
+        };
+
+
+      mediaRecorder.onstop =
+        async function() {
+
+          stream
+            .getTracks()
+            .forEach(track =>
+              track.stop()
+            );
+
+
+          const audioBlob =
+            new Blob(audioChunks, {
+              type: mediaRecorder.mimeType
+            });
+
+
+          setStatus(
+            "Transcribing..."
+          );
+
+
+          try {
+
+            const base64 =
+              await blobToBase64(
+                audioBlob
+              );
+
+
+            const response =
+              await fetch(
+                APPS_SCRIPT_URL,
+                {
+
+                  method: "POST",
+
+                  headers: {
+                    "Content-Type":
+                      "application/json"
+                  },
+
+                  body: JSON.stringify({
+
+                    action: "transcribe",
+
+                    audio: base64,
+
+                    mimeType:
+                      audioBlob.type
+
+                  })
+
+                }
+              );
+
+
+            const result =
+              await response.json();
+
+
+            if (!result.success) {
+
+              throw new Error(
+                result.error
+              );
+
+            }
+
+
+            document
+              .getElementById(
+                "messageInput"
+              )
+              .value =
+              result.transcript;
+
+
+            setStatus(
+              "Transcribed — sending..."
+            );
+
+
+            await sendMessage();
+
+
+          } catch (error) {
+
+            setStatus(
+              "Voice error: " +
+              error.message
+            );
+
+          }
+
+        };
+
+
+      mediaRecorder.start();
+
+      isRecording = true;
+
+
+      const button =
+        document.getElementById(
+          "micButton"
+        );
+
+
+      button.innerText =
+        "⏹️ Stop";
+
+      button.classList.add(
+        "recording"
+      );
+
+
+      setStatus(
+        "🎙️ Listening..."
+      );
+
+
+    } catch (error) {
+
+      setStatus(
+        "Microphone error: " +
+        error.message
+      );
+
+    }
+
+  }
+
+
+  // =====================================================
+  // BLOB → BASE64
+  // =====================================================
+
+  function blobToBase64(blob) {
+
+    return new Promise(
+      (resolve, reject) => {
+
+        const reader =
+          new FileReader();
+
+
+        reader.onloadend =
+          function() {
+
+            resolve(
+              reader.result
+                .split(",")[1]
+            );
+
+          };
+
+
+        reader.onerror =
+          reject;
+
+
+        reader.readAsDataURL(blob);
+
+      }
+    );
+
+  }
+
+
+  // =====================================================
+  // TEXT-TO-SPEECH
+  // =====================================================
+
+  function speak(text) {
+
+    if (!("speechSynthesis" in window))
+      return;
+
+
+    window.speechSynthesis.cancel();
+
+
+    const utterance =
+      new SpeechSynthesisUtterance(
+        text
+      );
+
+
+    utterance.rate = 1.0;
+
+    utterance.pitch = 1.0;
+
+    utterance.volume = 1.0;
+
+
+    window.speechSynthesis.speak(
+      utterance
+    );
+
+  }
+
+
+  // =====================================================
+  // STATUS
+  // =====================================================
+
+  function setStatus(text) {
+
+    document.getElementById(
+      "status"
+    ).innerText = text;
+
+  }
+
+
+  // =====================================================
+  // ENTER KEY
+  // =====================================================
+
+  document
+    .getElementById("messageInput")
+    .addEventListener(
+      "keydown",
+      function(event) {
+
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey
+        ) {
+
+          event.preventDefault();
+
+          sendMessage();
+
+        }
+
+      }
+    );
+
+</script>
+
+</body>
+</html>
